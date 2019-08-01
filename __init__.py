@@ -31,28 +31,28 @@ class DbHandler:
         self.database = sqlite3.connect("scatter.db")
         self.cursor = self.database.cursor()
 
-    def save(self, data):
+    def save(self, message, signature, timestamp):
         """Save data, save hash"""
-        self.cursor.execute("INSERT OR IGNORE INTO data VALUES (?,?)", (data,hash(data)))
+        self.cursor.execute("INSERT OR IGNORE INTO data VALUES (?,?,?,?)", (message, hash(message), signature, timestamp,))
         self.database.commit()
 
     def get(self, hash):
         """"Get data based on hash"""
-        self.cursor.execute("SELECT * FROM data WHERE hash = ?", (hash,))
-        returned = self.cursor.fetchall()[0]
-        db_result = {"data": returned[0], "hash": returned[1]}
-        return db_result
+        try:
+            self.cursor.execute("SELECT * FROM data WHERE hash = ?", (hash,))
+            returned = self.cursor.fetchall()[0]
+            db_result = {"data": returned[0], "hash": returned[1]}
+            return db_result
+        except:
+            return False
 
     def create(self):
         """Create database if it does not exist"""
-        self.cursor.execute('CREATE TABLE IF NOT EXISTS `data` ( '
-                   '`data` TEXT, '
-                   '`hash` TEST UNIQUE,'
-                   'PRIMARY KEY(`hash`)'
-                   ' )')
+        self.cursor.execute('CREATE TABLE IF NOT EXISTS `data` ( `message` TEXT, `hash` TEXT UNIQUE, `signature` TEXT UNIQUE, `timestamp` NUMERIC, PRIMARY KEY(`hash`))')
 
 
 def hash(data):
+    print(data)
     hashed = blake2b(repr((data)).encode(), digest_size=20).hexdigest()
     return hashed
 
@@ -74,9 +74,10 @@ def SCTTR_store(socket_handler):
     MANAGER.app_log.warning("EXTRA command SCTTR_store")
     input = MANAGER.execute_filter_hook('receive_extra_packet', {'socket': socket_handler}, first_only=True)
     result = input['data']
+    print(result)
     db = DbHandler()
-    db.save(result)
-    data = json.dumps({"data" : result,"hash" : hash(result)})
+    db.save(result["message"],result["signature"],result["timestamp"])
+    data = json.dumps({"message" : result["message"],"hash" : hash(result["message"]), "signature":result["signature"], "timestamp":result["timestamp"]})
     MANAGER.execute_filter_hook('send_data_back', {'socket': socket_handler, 'data': data}, first_only=True)
 
 
@@ -84,9 +85,10 @@ def SCTTR_get(socket_handler):
     """This command takes one param from an extra packet (the hash) and sends back the stored data if any"""
     MANAGER.app_log.warning("EXTRA command SCTTR_get")
     input = MANAGER.execute_filter_hook('receive_extra_packet', {'socket': socket_handler}, first_only=True)
+    print(input)
     result = input['data']
     db = DbHandler()
-    data = json.dumps(db.get(result))
+    data = db.get(result)
     MANAGER.execute_filter_hook('send_data_back', {'socket': socket_handler, 'data': data}, first_only=True)
 
 
